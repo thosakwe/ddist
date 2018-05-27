@@ -60,7 +60,8 @@ final ArgParser argParser = new ArgParser(allowTrailingOptions: true)
         'math',
         'typed_data'
       ],
-      help: 'Standard Dart libraries to be bundled with the tarball.');
+      help:
+          'Standard Dart libraries to be bundled with the tarball, OR `none`.');
 
 main(List<String> args) async {
   try {
@@ -155,31 +156,29 @@ main(List<String> args) async {
     };
 
     for (String path in argResults['copy']) {
-      var glob = new Glob(path, recursive: true);
+      String globPath = path;
+      String outPath;
+
+      if (path.contains(':')) {
+        var split = path.split(':').where((s) => s.trim().isNotEmpty).toList();
+        if (split.length < 1)
+          throw 'Malformed `copy` string: "$path". Missing a path after the `:`.';
+        else {
+          globPath = split[0].trim();
+          outPath = split[1].trim();
+        }
+      }
+
+      var glob = new Glob(globPath, recursive: true);
       var list = await glob.list().toList();
 
-      if (list.length == 1) {
-        if (!path.contains(':')) {
-          copy[path] = path;
-        } else {
-          var split =
-              path.split(':').where((s) => s.trim().isNotEmpty).toList();
-          if (split.length < 1)
-            throw 'Malformed `copy` string: "$path". Missing a path after the `:`.';
-          copy[split[0].trim()] = split[1].trim();
-        }
-      } else {
-        for (var entity in list) {
-          if (entity is File) {
-            if (!path.contains(':')) {
-              copy[entity.path] = entity.path;
-            } else {
-              var split =
-                  path.split(':').where((s) => s.trim().isNotEmpty).toList();
-              if (split.length < 1)
-                throw 'Malformed `copy` string: "$path". Missing a path after the `:`.';
-              copy[entity.path] = p.join(split[1].trim(), entity.path);
-            }
+      for (var entity in list) {
+        if (entity is File) {
+          if (!path.contains(':')) {
+            copy[entity.path] = entity.path;
+          } else {
+            copy[entity.path] =
+                outPath == null ? entity.path : p.join(outPath, entity.path);
           }
         }
       }
@@ -189,19 +188,21 @@ main(List<String> args) async {
       logger.fine('Adding "VERSION" file with contents "$version"...');
       var archiveFile =
           new ArchiveFile('VERSION', version.length, utf8.encode(version))
-            ..mode = 664
+            ..mode = 777
             ..lastModTime = new DateTime.now().millisecondsSinceEpoch;
       archive.addFile(archiveFile);
     }
 
-    for (String sdkPath in argResults['sdk']) {
-      var libPath = p.join(getSdkPath(), 'lib', sdkPath);
+    if (!argResults['sdk'].contains('none')) {
+      for (String sdkPath in argResults['sdk']) {
+        var libPath = p.join(getSdkPath(), 'lib', sdkPath);
 
-      await for (var entity in new Directory(libPath).list(recursive: true)) {
-        if (entity is File) {
-          var parts = ['dart-sdk', 'lib', sdkPath];
-          copy[entity.path] = p.joinAll(
-              parts..addAll(p.split(p.relative(entity.path, from: libPath))));
+        await for (var entity in new Directory(libPath).list(recursive: true)) {
+          if (entity is File) {
+            var parts = ['dart-sdk', 'lib', sdkPath];
+            copy[entity.path] = p.joinAll(
+                parts..addAll(p.split(p.relative(entity.path, from: libPath))));
+          }
         }
       }
     }
