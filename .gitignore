@@ -6,3 +6,6 @@ pubspec.lock
 *.dylib
 *.o
 *.dll
+*.obj
+*.a
+*.so
