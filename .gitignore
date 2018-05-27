@@ -3,3 +3,6 @@ example/dist
 .dart_tool
 pubspec.lock
 .DS_Store
+*.dylib
+*.o
+*.dll
